@@ -12,7 +12,46 @@ import torch.nn.functional as F
 import networks_lig
 from scipy import ndimage #new
 import torch.optim as optim
+def write_out_pdb(fpath,vecs,scores,scorecut = None,pro_paths=None):
+    form = 'HETATM%5d  O   WAT X%4d    %8.3f%8.3f%8.3f  1.00%6.2f\n'
+    length = len(vecs)
+    f = open(fpath,'w')
+    dump = []
+    atmno_end = 0
+    #write protein
+    if pro_paths != None:
+        for propath in pro_paths['pro']:
+            f_pro = open(propath,'r')
+            lines = f_pro.readlines()
+            end_ter = False
+            for line in lines:
+                if line.startswith("ATOM") or line.startswith("HETATM"):
+                    atmno_end = int(line[6:11])
+                    f.write(line)
+                    end_ter = False
+                elif line.startswith("TER"):
+                    f.write(line)
+                    end_ter = True
+            if not end_ter:
+                f.write("TER\n")
 
+    for i in range(length):
+        write = False
+        if (scorecut == None):
+            write = True
+        elif scores[i] > scorecut:
+            write = True
+        else:
+            write = False
+        if write:
+            newline = form%((i+atmno_end+1),(i+1001),vecs[i][0],vecs[i][1],vecs[i][2],scores[i])
+            dump.append( [ scores[i] , newline ] )
+    #sort!
+    dump_sorted = sorted(dump, key = lambda x: -1.0*x[0])
+    for i in range(min(8999,len(dump_sorted))):
+        f.write(dump_sorted[i][1])
+    f.write("TER\nEND\n")
+    f.close()
 def place_water(prob, null, vec_start, kernel, vcut=1.0, grid =0.5,padding=4.0,ignore_padding=False):
     #prob, ban: 3 dimension array
     #probability: result from net
@@ -172,11 +211,15 @@ def run_place_water(vec_starts, np_inputs, out, batch, dr ,vcut=0.6,grid=0.5 ):
     for trg_idx in range((out.shape[0])): 
         watvecs,scores =  place_water(out[trg_idx][0], np_null[trg_idx][0], 
                                     vec_starts[trg_idx], kernel, vcut=vcut, grid =grid)
-        zipped = {'vecs':watvecs, 'scores':scores}
+        #zipped = {'vecs':watvecs, 'scores':scores}
         
-        fpath = '%s/%s.bin'%(dr,batch[trg_idx])
-        grid_dl = open(fpath,'wb')
-        pickle.dump(zipped,grid_dl)
+        #fpath = '%s/%s.bin'%(dr,batch[trg_idx])
+        #grid_dl = open(fpath,'wb')
+        #pickle.dump(zipped,grid_dl)
+        
+        zipped = {'vecs':watvecs, 'scores':scores}
+        fpath = '%s/%s.pdb'%(dr,batch[trg_idx])
+        write_out_pdb(fpath,watvecs,scores)
 
 def run_place_water_part(vec_starts, np_inputs, out, vcut=0.6,grid=0.5,padding=4.0):
     kernel = build_gkernel(grid=grid, r = 1.52) 
@@ -332,9 +375,15 @@ def run_full_epoch(env, epoch, train=True,build=False, dr=None):
             grid_prot[:,:,g_i[0]:g_f[0], g_i[1]:g_f[1], g_i[2]:g_f[2]] = np_inputs[:,:,w_i[0]:w_f[0], w_i[1]:w_f[1], w_i[2]:w_f[2]]
         grid_vs = np.array([[xs[0],ys[0],zs[0]]]) 
         wat_dict = run_place_water_part(grid_vs, grid_prot, grid_out,vcut=1.00,grid=0.5,padding=padding )
-        fpath = '%s/%s.bin'%(dr,idx)
-        grid_dl = open(fpath,'wb')
-        pickle.dump(wat_dict,grid_dl)
+        #fpath = '%s/%s.bin'%(dr,idx)
+        #grid_dl = open(fpath,'wb')
+        #pickle.dump(wat_dict,grid_dl)
+        fpath = '%s/%s.pdb'%(dr,idx)
+        if use_paths:
+            paths = env['paths_dict'][idx]
+            write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'],pro_paths = paths)
+        else:
+            write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'],pro_paths = None )
     
 def run_epoch(env, epoch, train=True,build=False, batchsize=4 ,dr=None):
     idxs      = env['idxs']
