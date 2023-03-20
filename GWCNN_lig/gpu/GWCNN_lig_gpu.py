@@ -378,7 +378,8 @@ def run_full_epoch(env, epoch, train=True,build=False, dr=None):
         #fpath = '%s/%s.bin'%(dr,idx)
         #grid_dl = open(fpath,'wb')
         #pickle.dump(wat_dict,grid_dl)
-        fpath = '%s/%s.pdb'%(dr,idx)
+        #fpath = '%s/%s.pdb'%(dr,idx)
+        fpath = '%s.pdb'%(idx)
         if use_paths:
             paths = env['paths_dict'][idx]
             write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'],pro_paths = paths)
@@ -585,7 +586,7 @@ if __name__ == '__main__':
     #=================================================================================
     if len(sys.argv) < 3:
         print('usage: GWCNN_lig_gpu.py [input PDB/mmCIF] (input ligand mol2) [output name] ') 
-        return
+        raise ValueError
         
     elif len(sys.argv) == 3:        
         pro_path = sys.argv[1]

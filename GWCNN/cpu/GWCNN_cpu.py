@@ -345,7 +345,8 @@ def run_full_epoch(env, epoch, train=True,build=False, dr=None,tlog = False, tlo
 
         grid_vs = np.array([[xs[0],ys[0],zs[0]]]) 
         wat_dict = run_place_water_part(grid_vs, grid_prot, grid_out,vcut=2.00,grid=0.5,padding=padding )
-        fpath = '%s/%s.pdb'%(dr,idx)
+        #fpath = '%s/%s.pdb'%(dr,idx)
+        fpath = '%s.pdb'%(idx)
         write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'])
         time_end = time.time()
         if tlog == True:
