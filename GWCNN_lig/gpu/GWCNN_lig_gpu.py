@@ -259,23 +259,23 @@ def build_epoch(env, epoch, train=True, prefix='build'):
     with torch.no_grad():
         if train:
             dr = 'vec_result/train/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         else:
             dr = 'vec_result/test/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         run_epoch(env, epoch, train=train, build=True, batchsize=1 , dr=dr)
 def build_full_epoch(env, epoch, train=True, prefix='build'):
     with torch.no_grad():
         if train:
             dr = 'vec_result/train/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         else:
             dr = 'vec_result/test/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         run_full_epoch(env, epoch, train=train, dr=dr)
 
 #run_full_epoch_start
@@ -519,7 +519,8 @@ def predict_lig(nets,names ,in_path, out_name, lig_path=None, n_grid=64, padding
     
         if len(states) > 0:
             start_epoch = int(states[-1].split('/')[-1].split('.')[0].split('_')[-1])
-            net.module.load_state_dict(torch.load(states[-1]))
+            #net.module.load_state_dict(torch.load(states[-1]))
+            net.load_state_dict(torch.load(states[-1]))
         else:
             start_epoch = 0
         ####

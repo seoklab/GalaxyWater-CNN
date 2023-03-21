@@ -259,23 +259,23 @@ def build_epoch(env, epoch, train=True, prefix='build'):
     with torch.no_grad():
         if train:
             dr = 'vec_result/train/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         else:
             dr = 'vec_result/test/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         run_epoch(env, epoch, train=train, build=True, batchsize=1 , dr=dr)
 def build_full_epoch(env, epoch, train=True, prefix='build'):
     with torch.no_grad():
         if train:
             dr = 'vec_result/train/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         else:
             dr = 'vec_result/test/%s/'%prefix
-            if not os.access(dr,0):
-                os.mkdir(dr)
+            #if not os.access(dr,0):
+            #    os.mkdir(dr)
         run_full_epoch(env, epoch, train=train, dr=dr)
 
 #run_full_epoch_start

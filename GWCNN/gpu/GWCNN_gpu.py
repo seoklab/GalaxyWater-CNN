@@ -347,7 +347,8 @@ def run_full_epoch(env, epoch, train=True,build=False, dr=None,tlog = False, tlo
         #save_grid(grid_vs, grid_prot, grid_out, [idx], dr ,vcut=0.6,grid=0.5 ) #new
         
         wat_dict = run_place_water_part(grid_vs, grid_prot, grid_out,vcut=2.00,grid=0.5,padding=padding )
-        fpath = '%s/%s.pdb'%(dr,idx)
+        #fpath = '%s/%s.pdb'%(dr,idx)
+        fpath = '%s.pdb'%(idx)
         write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'])
         time_end = time.time()
         if tlog == True:
@@ -487,7 +488,8 @@ def predict_path(nets,names,in_path,out_name,n_grid=64, padding=4.0, build_prefi
     
         if len(states) > 0:
             start_epoch = int(states[-1].split('/')[-1].split('.')[0].split('_')[-1])
-            net.module.load_state_dict(torch.load(states[-1]))
+            #net.module.load_state_dict(torch.load(states[-1]))
+            net.load_state_dict(torch.load(states[-1]))
         else:
             start_epoch = 0
         
