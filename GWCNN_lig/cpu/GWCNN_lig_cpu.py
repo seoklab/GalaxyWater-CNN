@@ -7,6 +7,7 @@ import random
 from build_fg_lig_cpu import build_data_strict_all,build_gkernel,\
                      build_data_smtry,build_data_strict_smtry,build_data_strict_paths
 import numpy as np
+import torch #new 230518
 import torch.nn as nn
 import torch.nn.functional as F
 import networks_lig
@@ -61,63 +62,86 @@ def place_water(prob, null, vec_start, kernel, vcut=1.0, grid =0.5,padding=4.0,i
     #build oxygen sized gaussian kernel
     #1.52: radius of oxygen atom (in angstrom) 
     r_grid = int( 1 + (1.5*1.52)/grid ) #radius in grid debug
+    #r_grid = int( 1 + (1.52)/grid ) #radius in grid
     d_grid = 2*r_grid+1
     result = [] 
     scores = [] 
     maxv = 999.999
    
-    prob_new = prob * null
-    cv  = ndimage.convolve(prob_new, kernel, mode='reflect')
-
-    while (maxv >= vcut):
-        #1. since kernel is symmetric for i operation -> ignore about convolution eqn
-        #2. reflect was used for treating sliced water at border 
-        
-        ind = np.unravel_index(np.argmax(cv,axis=None),cv.shape) #sth like (20,30,40)
-        vec = vec_start + grid*np.array(ind)
-        maxv = cv[ind]
-
-        if (maxv < vcut):
-            break
-       
-        result.append(vec)
-        scores.append(maxv)
-
-        for v in range(d_grid**3):
-            i = v % d_grid
-            j = (v // d_grid)%d_grid
-            k = (v // (d_grid*d_grid))%d_grid
-            
-            x = min(prob.shape[0]-1, max(0, i+ind[0]-r_grid)) 
-            y = min(prob.shape[1]-1, max(0, j+ind[1]-r_grid))
-            z = min(prob.shape[2]-1, max(0, k+ind[2]-r_grid))
-            dx = grid*(i - r_grid) 
-            dy = grid*(j - r_grid) 
-            dz = grid*(k - r_grid) 
-
-            d =  (dx**2 + dy**2 + dz**2)**(0.5)
-            if d < (1.5*1.52):
-               cv[x][y][z] = 0.0
+    #new 
+    prob_new  = ndimage.convolve(prob, kernel, mode='reflect')
+    cv = prob_new * null
+    #faster algorithm
+    # 1. sort for cv_flatten, which is flattened version of origial array, cv. 
+    # 2. use argsort for finding index of highest scored water
+    # 3. check cv[idx] > vcut. 
+    # 4. place water
+    # 5. fill negative value to the too-close(<2.28A) element of cv array.
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    vec_init = vec_start #vec_start for ignore_padding is False, vec_start+padding for ignore_padding is True.
+    #removeing padded area
     if ignore_padding:
-        result_new = []
-        scores_new = []
-        for i,vec in enumerate(result):
-            diff    = vec - vec_start
-            n_grids = prob.shape
-            ignored = False
-            for j in range(len(prob.shape)):
-                if diff[j] < padding:
-                    ignored = True
-                    break
-                elif diff[j] > (grid*n_grids[j] - padding):
-                    ignored = True
-                    break
-            if not ignored:
-                result_new.append(vec)
-                scores_new.append(scores[i])
-        return result_new,scores_new
-    else:
-        return result,scores
+        vec_init += np.array([padding,padding,padding])
+        eps = 0.0001#for numerical stability        
+        pad_idx = int((padding +eps) / grid)
+        cv = cv[pad_idx:-pad_idx,pad_idx:-pad_idx,pad_idx:-pad_idx]
+   
+    cv_torch = torch.tensor(cv, dtype=torch.float32, device=device, requires_grad=False)
+    cv_flatten = torch.flatten(cv_torch)
+    cv_argsort = torch.argsort(cv_flatten,descending=True) 
+    cv_argsort_np = cv_argsort.cpu().detach().numpy()
+    cv_shape = cv.shape
+    n_cv = cv_flatten.shape[0]
+    for wat_idx in range(n_cv):
+        #finding index
+        argmax    = cv_argsort[wat_idx]
+        argmax_np = cv_argsort_np[wat_idx]
+        # using // for torch has further compatibility issue
+        ind    = ( torch.div(argmax, (cv_shape[1]*cv_shape[2]), rounding_mode='floor'),
+                   torch.div(argmax,  cv_shape[2]             , rounding_mode='floor')%cv_shape[1],
+                   argmax%cv_shape[2] )        
+        ind_np = ( argmax_np//(cv_shape[1]*cv_shape[2]), (argmax_np//cv_shape[2])%cv_shape[1], argmax_np%cv_shape[2] )
+        val = cv_torch[ind]
+
+        if val <0: #too-close from placed water
+            continue
+        elif val < vcut:
+            break  
+
+        vec = vec_init + grid*np.array(ind_np)
+        grid_vec = grid*torch.tensor(ind,dtype=torch.float32, device=device, requires_grad=False)#for water removal purpose
+        result.append(vec)
+        scores.append(val.cpu().detach().numpy())
+        #remove water score from CV too close with water elements
+        #check btorch.py
+        
+        min_pt = [ max(0, ind[i]-r_grid) for i in range(3)]
+        max_pt = [ min(cv.shape[i]-1, ind[i]+r_grid) for i in range(3)]        
+        x = torch.arange(min_pt[0],max_pt[0],1, out=torch.cuda.LongTensor() )
+        y = torch.arange(min_pt[1],max_pt[1],1, out=torch.cuda.LongTensor() )
+        z = torch.arange(min_pt[2],max_pt[2],1, out=torch.cuda.LongTensor() )
+        xind,yind,zind =torch.meshgrid([x,y,z],indexing='ij') #add indexing
+        xv = grid*xind.float()
+        yv = grid*yind.float()
+        zv = grid*zind.float()
+        vec_x = torch.full_like(xv,grid_vec[0])
+        vec_y = torch.full_like(yv,grid_vec[1])
+        vec_z = torch.full_like(zv,grid_vec[2])
+        #
+        dx = vec_x-xv
+        dy = vec_y-yv
+        dz = vec_z-zv
+        #
+        dx2 = dx*dx 
+        dy2 = dy*dy 
+        dz2 = dz*dz 
+        #
+        d2 = (dx2+dy2+dz2)
+        d  = torch.sqrt(d2)
+        #torch.where: (contidion, true,false)
+        mask  = torch.where(d<(1.5*1.52),-1000.0,0.0) #arbitary value big enough to make cv negative
+        cv_torch[min_pt[0]:max_pt[0], min_pt[1]:max_pt[1], min_pt[2]:max_pt[2] ] += mask[:,:,:]        
+    return result,scores
 
 def batch_idxs(idxs, batch=4, shuffle=True):
     result = []
@@ -341,9 +365,12 @@ def run_full_epoch(env, epoch, train=True,build=False, dr=None):
             #vec_starts: [vec_start] (current build_batch_full uses only one target for batch)
             vec_starts, np_inputs,np_answers,np_weights  = datum 
 
-            inputs  = torch.tensor(torch.FloatTensor(np_inputs),  device=device ,requires_grad=False, dtype=torch.float32)
-            answers = torch.tensor(torch.FloatTensor(np_answers), device=device ,requires_grad=False, dtype=torch.float32)
-            weights = torch.tensor(torch.FloatTensor(np_weights), device=device ,requires_grad=False, dtype=torch.float32)
+            #inputs  = torch.tensor(torch.FloatTensor(np_inputs),  device=device ,requires_grad=False, dtype=torch.float32)
+            #answers = torch.tensor(torch.FloatTensor(np_answers), device=device ,requires_grad=False, dtype=torch.float32)
+            #weights = torch.tensor(torch.FloatTensor(np_weights), device=device ,requires_grad=False, dtype=torch.float32)
+            inputs  = torch.tensor(np_inputs, dtype=torch.float32, device=device, requires_grad=False)
+            answers = torch.tensor(np_answers,dtype=torch.float32, device=device, requires_grad=False)
+            weights = torch.tensor(np_weights,dtype=torch.float32, device=device, requires_grad=False)
             inputs  = inputs.to(device=device) #gpu
             answers = answers.to(device=device) #gpu
             weights = weights.to(device=device) #gpu
@@ -413,9 +440,12 @@ def run_epoch(env, epoch, train=True,build=False, batchsize=4 ,dr=None):
         else:
             vec_starts, np_inputs,np_answers,np_weights = build_batch(batch,train=False,n_grid=n_grid,dbloss=dbloss)
     
-        inputs = torch.tensor(torch.FloatTensor(np_inputs), device=device ,requires_grad=False, dtype=torch.float32)
-        answers = torch.tensor(torch.FloatTensor(np_answers), device=device ,requires_grad=False, dtype=torch.float32)
-        weights = torch.tensor(torch.FloatTensor(np_weights), device=device ,requires_grad=False, dtype=torch.float32)
+        #inputs  = torch.tensor(torch.FloatTensor(np_inputs),  device=device ,requires_grad=False, dtype=torch.float32)
+        #answers = torch.tensor(torch.FloatTensor(np_answers), device=device ,requires_grad=False, dtype=torch.float32)
+        #weights = torch.tensor(torch.FloatTensor(np_weights), device=device ,requires_grad=False, dtype=torch.float32)
+        inputs  = torch.tensor(np_inputs, dtype=torch.float32, device=device, requires_grad=False)
+        answers = torch.tensor(np_answers,dtype=torch.float32, device=device, requires_grad=False)
+        weights = torch.tensor(np_weights,dtype=torch.float32, device=device, requires_grad=False)
         inputs = inputs.to(device=device) #gpu
         answers = answers.to(device=device) #gpu
         weights = weights.to(device=device) #gpu

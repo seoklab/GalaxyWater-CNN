@@ -196,7 +196,7 @@ def build_cuda_rect(vecs,fgs,grid=0.5,n_grid_arr=[48,48,48],weight=25.0,multi=1.
     #prepare model
     #device = torch.device("cpu")
     #ng = torch.tensor(torch.IntTensor(n_grid_arr), device=device ,requires_grad=False, dtype=torch.int32)
-    ng = torch.tensor(torch.IntTensor(n_grid_arr), requires_grad=False, dtype=torch.int32)
+    ng = torch.tensor(n_grid_arr, requires_grad=False, dtype=torch.int32)
     #ng = ng.to(device=device) #gpu
     model_pro = Model_pro(grid,ng)
     #model_pro.to(device)
