@@ -401,17 +401,20 @@ def run_full_epoch(env, epoch, train=True,build=False, dr=None):
             grid_out[:,:,g_i[0]:g_f[0], g_i[1]:g_f[1], g_i[2]:g_f[2]] = out[:,:,w_i[0]:w_f[0], w_i[1]:w_f[1], w_i[2]:w_f[2]]
             grid_prot[:,:,g_i[0]:g_f[0], g_i[1]:g_f[1], g_i[2]:g_f[2]] = np_inputs[:,:,w_i[0]:w_f[0], w_i[1]:w_f[1], w_i[2]:w_f[2]]
         grid_vs = np.array([[xs[0],ys[0],zs[0]]]) 
-        wat_dict = run_place_water_part(grid_vs, grid_prot, grid_out,vcut=1.00,grid=0.5,padding=padding )
-        #fpath = '%s/%s.bin'%(dr,idx)
-        #grid_dl = open(fpath,'wb')
-        #pickle.dump(wat_dict,grid_dl)
-        #fpath = '%s/%s.pdb'%(dr,idx)
-        fpath = '%s.pdb'%(idx)
-        if use_paths:
-            paths = env['paths_dict'][idx]
-            write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'],pro_paths = paths)
-        else:
-            write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'],pro_paths = None )
+        vcuts = [34,38,42]
+        for vcut in vcuts:
+            vc_float = float(vcut)        
+            wat_dict = run_place_water_part(grid_vs, grid_prot, grid_out,vcut=vc_float,grid=0.5,padding=padding )
+            #fpath = '%s/%s.bin'%(dr,idx)
+            #grid_dl = open(fpath,'wb')
+            #pickle.dump(wat_dict,grid_dl)
+            #fpath = '%s/%s.pdb'%(dr,idx)
+            fpath = '%s_scut_%2d.pdb'%(idx,vcut)
+            if use_paths:
+                paths = env['paths_dict'][idx]
+                write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'],pro_paths = paths)
+            else:
+                write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'],pro_paths = None )
     
 def run_epoch(env, epoch, train=True,build=False, batchsize=4 ,dr=None):
     idxs      = env['idxs']

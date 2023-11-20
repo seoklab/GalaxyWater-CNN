@@ -590,6 +590,9 @@ def read_pdb(fpath):
         alt = line[16]
         if alt not in [' ','A']: #added
             continue             #added
+        #ignore water added - 231120
+        if resname in ['HOH','WAT']:
+            continue
         # fix resname
         if resname in modres.keys():
             restmp = modres[resname]

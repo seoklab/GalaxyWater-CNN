@@ -373,7 +373,13 @@ def run_full_epoch(env, epoch, train=True,build=False, dr=None,tlog = False, tlo
         grid_vs = np.array([[xs[0],ys[0],zs[0]]]) 
         #save_grid(grid_vs, grid_prot, grid_out, [idx], dr ,vcut=0.6,grid=0.5 ) #new
         
-        wat_dict = run_place_water_part(grid_vs, grid_prot, grid_out,vcut=2.00,grid=0.5,padding=padding )
+        vcuts = [34,38,42]
+        for vcut in vcuts:
+            vc_float = float(vcut)
+            wat_dict = run_place_water_part(grid_vs, grid_prot, grid_out,vcut=vc_float,grid=0.5,padding=padding )
+            #fpath = '%s/%s.pdb'%(dr,idx)
+            fpath = '%s_scut_%2d.pdb'%(idx,vcut)
+            write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'])
         #fpath = '%s/%s.pdb'%(dr,idx)
         fpath = '%s.pdb'%(idx)
         write_out_pdb(fpath,wat_dict['vecs'],wat_dict['scores'])
